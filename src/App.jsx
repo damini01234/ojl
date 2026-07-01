@@ -1,311 +1,324 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, Plus, User } from 'lucide-react';
-import ReelsFeed, { DEFAULT_REELS } from './components/ReelsFeed';
-import UploadModule from './components/UploadModule';
-import OrderSummaryPanel from './components/OrderSummaryPanel';
-import AuthModule from './components/AuthModule';
+import { HashRouter } from 'react-router-dom';
+import AppRoutes from './routes/AppRoutes';
+import { SAMPLE_REELS } from './data/sampleData';
+import { supabase } from './utils/supabaseClient';
 
 /**
- * App Component - The central state controller.
- * Implements Global Route Gating behind a high-fidelity Instagram Signup Screen.
+ * Main App Container
+ * Wraps HashRouter to support client-side routing within a mobile simulator casing.
  */
 export default function App() {
-  // --- STATES ---
-  // Active Navigation Tab: 'home' | 'upload' | 'profile'
-  const [activeTab, setActiveTab] = useState('home');
-
-  // Creator Session Details: { fullName, creatorHandle, bio }
+  // 1. Session state
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const savedSession = localStorage.getItem('creator_session');
+      const savedSession = localStorage.getItem('mukbites_session');
       return savedSession ? JSON.parse(savedSession) : null;
     } catch {
       return null;
     }
   });
 
-  // Top Bar Search Address query - passed down to ReelsFeed for top badge
-  const [userAddress, setUserAddress] = useState("Boring Road, Patna");
-
-  // Reels feed dataset loaded from localStorage key 'patna_shorts_db'
-  const [reelsDataset, setReelsDataset] = useState(() => {
+  // 2. Following state (List of creator handles currently followed)
+  const [followingList, setFollowingList] = useState(() => {
     try {
-      const saved = localStorage.getItem('patna_shorts_db');
-      if (saved) {
-        return JSON.parse(saved);
-      } else {
-        localStorage.setItem('patna_shorts_db', JSON.stringify(DEFAULT_REELS));
-        return DEFAULT_REELS;
-      }
+      const saved = localStorage.getItem('mukbites_following');
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return DEFAULT_REELS;
+      return [];
     }
   });
 
-  // Active checkout drawer item trigger
-  const [currentOrder, setCurrentOrder] = useState(null);
+  // 3. Reels dataset state
+  const [reelsDataset, setReelsDataset] = useState([]);
 
-  // Swiggy/Zomato style past order history logs loaded from localStorage key 'order_history_log'
-  const [orderHistoryList, setOrderHistoryList] = useState(() => {
+  // 4. Order History transactions state
+  const [orderHistory, setOrderHistory] = useState(() => {
     try {
-      const saved = localStorage.getItem('order_history_log');
-      if (saved) {
-        return JSON.parse(saved);
+      const savedOrders = localStorage.getItem('mukbites_orders');
+      if (savedOrders) {
+        return JSON.parse(savedOrders);
       } else {
-        const defaults = [
+        const defaultOrders = [
           {
-            id: 'past-1',
-            dishTitle: 'Spicy Chilli Samosa',
-            price: 99,
-            quantity: 2,
-            restaurantName: "Kapildev's Elevens, Boring Road",
-            distance: '• 3.4 km away',
-            paymentMode: 'Online UPI / Card',
-            grandTotal: 247.90,
-            timestamp: 'Yesterday, 8:45 PM',
+            id: 'ord-past-1',
+            dishTitle: 'Cheesy Lava Burger',
+            price: 249,
+            quantity: 1,
+            restaurantName: 'The Burger Palace, Boring Road',
+            paymentMode: 'Online (UPI)',
+            grandTotal: 296,
+            timestamp: 'Yesterday, 9:15 PM',
             deliveryAddress: 'Boring Road, Patna',
-            contactNumber: '9876543210'
+            contactNumber: '9876543210',
+            customerName: currentUser?.fullName || 'Patna Foodie'
           },
           {
-            id: 'past-2',
-            dishTitle: 'Steaming Veg Momos',
-            price: 79,
-            quantity: 1,
-            restaurantName: 'The Local Bistro',
-            distance: '• 4.8 km away',
+            id: 'ord-past-2',
+            dishTitle: 'Fluffy Honey Pancakes',
+            price: 189,
+            quantity: 2,
+            restaurantName: "Fluffy's Cafe, Kankarbagh",
             paymentMode: 'Cash on Delivery (COD)',
-            grandTotal: 122.95,
-            timestamp: '3 days ago',
-            deliveryAddress: 'Fraser Road, Patna',
-            contactNumber: '9988776655'
+            grandTotal: 433,
+            timestamp: '2 days ago',
+            deliveryAddress: 'Kankarbagh, Patna',
+            contactNumber: '9988776655',
+            customerName: currentUser?.fullName || 'Patna Foodie'
           }
         ];
-        localStorage.setItem('order_history_log', JSON.stringify(defaults));
-        return defaults;
+        localStorage.setItem('mukbites_orders', JSON.stringify(defaultOrders));
+        return defaultOrders;
       }
     } catch {
       return [];
     }
   });
 
-  // Persist session updates to localStorage
-  useEffect(() => {
+  // Fetch reels from Supabase
+  const fetchReels = async () => {
     try {
-      if (currentUser) {
-        localStorage.setItem('creator_session', JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem('creator_session');
-      }
-    } catch (err) {
-      console.warn("Failed to persist creator session to localStorage: ", err);
-    }
-  }, [currentUser]);
+      const { data, error } = await supabase
+        .from('videos')
+        .select(`
+          id,
+          user_id,
+          video_url,
+          food_name,
+          price,
+          caption,
+          restaurant_name,
+          profiles (
+            username,
+            profile_image
+          )
+        `)
+        .order('id', { ascending: false });
 
-  /**
-   * Action to prepend a new creator reel to the feed database.
-   */
-  const handlePublishReel = (newReel) => {
-    const updated = [newReel, ...reelsDataset];
-    setReelsDataset(updated);
-    try {
-      localStorage.setItem('patna_shorts_db', JSON.stringify(updated));
+      if (error) throw error;
+
+      const mapped = data.map(v => {
+        let handle = v.profiles?.username || 'anonymous';
+        if (!handle.startsWith('@')) {
+          handle = `@${handle}`;
+        }
+        return {
+          id: v.id,
+          userId: v.user_id,
+          username: handle,
+          profilePic: v.profiles?.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop',
+          videoUrl: v.video_url,
+          caption: v.caption || '',
+          likesCount: 154,
+          sharesCount: 38,
+          isLiked: false,
+          isSaved: false,
+          dishName: v.food_name,
+          restaurantName: v.restaurant_name || 'Gourmet Kitchen',
+          price: Number(v.price) || 99,
+          rating: 4.5,
+          deliveryTime: '25 mins',
+          deliveryFee: 30,
+          followersCount: 1200
+        };
+      });
+
+      // Merge Supabase reels with SAMPLE_REELS so feed is never blank
+      const combined = [...mapped, ...SAMPLE_REELS.filter(sr => !mapped.some(mv => mv.id === sr.id))];
+      setReelsDataset(combined);
     } catch (err) {
-      console.error("Failed to commit new reel to patna_shorts_db pool: ", err);
+      console.error("Error fetching reels from Supabase:", err);
+      // Fallback
+      setReelsDataset(SAMPLE_REELS);
     }
   };
 
-  /**
-   * Toggle Like state for a specific reel and sync back to database
-   */
+  const fetchUserProfile = async (user) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (data) {
+        let handle = data.username || `user_${user.id.slice(0, 5)}`;
+        if (!handle.startsWith('@')) {
+          handle = `@${handle}`;
+        }
+        const sessionData = {
+          id: user.id,
+          fullName: user.user_metadata?.full_name || handle.replace('@', ''),
+          creatorHandle: handle,
+          email: user.email,
+          bio: data.bio || '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
+          profilePic: data.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
+        };
+        setCurrentUser(sessionData);
+        localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
+      } else {
+        const defaultHandle = `@user_${user.id.slice(0, 5)}`;
+        const defaultProfile = {
+          id: user.id,
+          username: defaultHandle,
+          bio: '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
+          profile_image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
+        };
+        await supabase.from('profiles').upsert(defaultProfile);
+        const sessionData = {
+          id: user.id,
+          fullName: user.user_metadata?.full_name || 'MukBites User',
+          creatorHandle: defaultHandle,
+          email: user.email,
+          bio: defaultProfile.bio,
+          profilePic: defaultProfile.profile_image
+        };
+        setCurrentUser(sessionData);
+        localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
+      }
+    } catch (err) {
+      console.error("Error loading profile:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchReels();
+
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        fetchUserProfile(session.user);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        fetchUserProfile(session.user);
+      } else {
+        setCurrentUser(null);
+        localStorage.removeItem('mukbites_session');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handlePublishReel = () => {
+    fetchReels();
+  };
+
   const handleLikeToggle = (reelId) => {
-    const updated = reelsDataset.map(reel => {
-      if (reel.id === reelId) {
-        const nextIsLiked = !reel.isLiked;
+    const updated = reelsDataset.map(r => {
+      if (r.id === reelId) {
+        const nextIsLiked = !r.isLiked;
         return {
-          ...reel,
+          ...r,
           isLiked: nextIsLiked,
-          likesCount: nextIsLiked ? (reel.likesCount || 0) + 1 : Math.max(0, (reel.likesCount || 0) - 1)
+          likesCount: nextIsLiked ? (r.likesCount || 0) + 1 : Math.max(0, (r.likesCount || 0) - 1)
         };
       }
-      return reel;
+      return r;
     });
     setReelsDataset(updated);
-    try {
-      localStorage.setItem('patna_shorts_db', JSON.stringify(updated));
-    } catch (err) {
-      console.error("Failed to commit like toggle to patna_shorts_db: ", err);
-    }
   };
 
-  const handleOrderSelect = (orderItem) => {
-    setCurrentOrder(orderItem);
+  const handleSaveToggle = (reelId) => {
+    const updated = reelsDataset.map(r => {
+      if (r.id === reelId) {
+        return {
+          ...r,
+          isSaved: !r.isSaved
+        };
+      }
+      return r;
+    });
+    setReelsDataset(updated);
+  };
+
+  const handleFollowToggle = (username) => {
+    let updated;
+    const isFollowing = followingList.includes(username);
+    
+    if (isFollowing) {
+      updated = followingList.filter(u => u !== username);
+    } else {
+      updated = [...followingList, username];
+    }
+    
+    setFollowingList(updated);
+    localStorage.setItem('mukbites_following', JSON.stringify(updated));
+
+    const updatedReels = reelsDataset.map(r => {
+      if (r.username === username) {
+        const currentCount = r.followersCount || 1000;
+        return {
+          ...r,
+          followersCount: isFollowing ? Math.max(0, currentCount - 1) : currentCount + 1
+        };
+      }
+      return r;
+    });
+    setReelsDataset(updatedReels);
   };
 
   const handleAddOrderToHistory = (newOrder) => {
-    const updated = [newOrder, ...orderHistoryList];
-    setOrderHistoryList(updated);
+    const updated = [newOrder, ...orderHistory];
+    setOrderHistory(updated);
     try {
-      localStorage.setItem('order_history_log', JSON.stringify(updated));
+      localStorage.setItem('mukbites_orders', JSON.stringify(updated));
     } catch (err) {
-      console.error("Failed to save order to history log: ", err);
+      console.error(err);
     }
   };
 
-  const handleCloseDrawer = () => {
-    setCurrentOrder(null);
+  const handleLoginSuccess = (session) => {
+    setCurrentUser(session);
   };
 
-  // --- REQUIREMENT 1: GLOBAL ROUTE GATING ---
-  // If no creator session exists, strictly lock the screen to render AuthModule signup.
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen w-full bg-[#0e0e0e] flex flex-col items-center justify-center p-4 selection:bg-neutral-800 selection:text-white">
-        
-        {/* Strict smartphone centered casing */}
-        <div className="relative w-full max-w-md h-[852px] bg-black rounded-[40px] shadow-2xl border-[8px] border-neutral-900 overflow-hidden flex flex-col justify-center">
-          
-          {/* Notch bezel */}
-          <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-full z-55 pointer-events-none flex items-center justify-center border border-neutral-850">
-            <div className="w-3 h-3 bg-neutral-900 rounded-full ml-auto mr-4 border border-neutral-800" />
-          </div>
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setFollowingList([]);
+    localStorage.removeItem('mukbites_session');
+    localStorage.removeItem('mukbites_following');
+  };
 
-          {/* Full Screen Gate Overlay */}
-          <AuthModule setCurrentUser={setCurrentUser} />
-          
-        </div>
+  const handleUpdateProfile = (updatedProfile) => {
+    setCurrentUser(updatedProfile);
+    localStorage.setItem('mukbites_session', JSON.stringify(updatedProfile));
+    fetchReels(); // Refresh handles and profile pictures in the feed
+  };
 
-        {/* Info text */}
-        <div className="mt-4 text-center max-w-sm pointer-events-none">
-          <p className="text-[10px] text-neutral-600 font-bold uppercase tracking-widest">MukBites Simulator</p>
-          <p className="text-[9px] text-neutral-700">Please authenticate to access Patna Shoppable Food Reels.</p>
-        </div>
-
-      </div>
-    );
-  }
-
-  // --- UNLOCKED FULL SYSTEM ---
   return (
-    <div className="min-h-screen w-full bg-[#0e0e0e] flex flex-col items-center justify-center p-4 selection:bg-neutral-850 selection:text-white">
+    <div className="min-h-screen w-full bg-black md:bg-[#0a0a0b] flex flex-col items-center justify-center md:p-4 selection:bg-orange-500/20 selection:text-orange-400">
       
-      {/* Strict smartphone centered casing */}
-      <div className="relative w-full max-w-md h-[852px] bg-black rounded-[40px] shadow-2xl border-[8px] border-neutral-900 overflow-hidden flex flex-col">
+      {/* Centered High-Fidelity Smartphone Casing on desktop, full-screen on mobile */}
+      <div className="relative w-full h-[100dvh] md:h-[852px] md:max-h-[90dvh] max-w-none md:max-w-md bg-black md:rounded-[40px] shadow-none md:shadow-2xl border-0 md:border-[8px] border-neutral-900 overflow-hidden flex flex-col">
         
-        {/* Notch bezel */}
-        <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-black rounded-full z-50 pointer-events-none flex items-center justify-center border border-neutral-850">
-          <div className="w-3 h-3 bg-neutral-900 rounded-full ml-auto mr-4 border border-neutral-850" />
-        </div>
-
-        {/* MAIN COMPONENT STREAM VIEWER */}
-        <div className="flex-1 w-full h-full relative overflow-hidden bg-black">
-          {activeTab === 'home' && (
-            <ReelsFeed
-              userAddress={userAddress}
-              setUserAddress={setUserAddress}
-              onOrderSelect={handleOrderSelect}
-              reelsDataset={reelsDataset}
-              onLikeToggle={handleLikeToggle}
-            />
-          )}
-
-          {activeTab === 'upload' && (
-            <UploadModule
-              currentUser={currentUser}
-              setCurrentUser={setCurrentUser}
-              onPublish={handlePublishReel}
-              onNavigateHome={() => setActiveTab('home')}
-            />
-          )}
-
-          {activeTab === 'profile' && (
-            <OrderSummaryPanel
-              isStandalone={true}
-              isOpen={true}
-              currentOrder={null}
-              orderHistoryList={orderHistoryList}
-              onClose={() => {}}
-              onAddOrderToHistory={handleAddOrderToHistory}
-              currentUser={currentUser}
-              setCurrentUser={setCurrentUser}
-              reelsDataset={reelsDataset}
-            />
-          )}
-        </div>
-
-        {/* 
-          MODAL DRAWER BILLING (SLIDE SHEETS OVERLAY)
-          Active when ordering from Home or Upload tabs.
-        */}
-        {activeTab !== 'profile' && (
-          <OrderSummaryPanel
-            isStandalone={false}
-            isOpen={currentOrder !== null}
-            currentOrder={currentOrder}
-            orderHistoryList={orderHistoryList}
-            onClose={handleCloseDrawer}
+        {/* Router Context wrapper inside the phone screen */}
+        <HashRouter>
+          <AppRoutes
+            currentUser={currentUser}
+            onLoginSuccess={handleLoginSuccess}
+            onLogout={handleLogout}
+            onUpdateProfile={handleUpdateProfile}
+            reels={reelsDataset}
+            followingList={followingList}
+            onFollowToggle={handleFollowToggle}
+            onLikeToggle={handleLikeToggle}
+            onSaveToggle={handleSaveToggle}
+            orderHistory={orderHistory}
             onAddOrderToHistory={handleAddOrderToHistory}
+            onPublish={handlePublishReel}
           />
-        )}
+        </HashRouter>
 
-        {/* FIXED BOTTOM NAVIGATION PANEL WRAPPER */}
-        <div className="absolute bottom-0 inset-x-0 h-16 bg-neutral-950 border-t border-neutral-900 flex justify-around items-center z-50">
-          
-          {/* Tab 1: Home Feed */}
-          <button
-            onClick={() => {
-              setActiveTab('home');
-              handleCloseDrawer();
-            }}
-            className={`flex flex-col items-center justify-center p-2.5 transition rounded-xl ${
-              activeTab === 'home' ? 'text-orange-500 scale-105' : 'text-neutral-500 hover:text-neutral-300'
-            }`}
-            type="button"
-            aria-label="Home Feed"
-          >
-            <Compass className="w-5.5 h-5.5" />
-            <span className="text-[9px] mt-0.5 font-bold">Feed</span>
-          </button>
-
-          {/* Tab 2: Create Post */}
-          <button
-            onClick={() => {
-              setActiveTab('upload');
-              handleCloseDrawer();
-            }}
-            className={`flex flex-col items-center justify-center p-2.5 transition rounded-xl ${
-              activeTab === 'upload' ? 'text-orange-500 scale-105' : 'text-neutral-500 hover:text-neutral-300'
-            }`}
-            type="button"
-            aria-label="Create Post"
-          >
-            <Plus className="w-5.5 h-5.5" />
-            <span className="text-[9px] mt-0.5 font-bold">Create</span>
-          </button>
-
-          {/* Tab 3: Profile */}
-          <button
-            onClick={() => {
-              setActiveTab('profile');
-              handleCloseDrawer();
-            }}
-            className={`flex flex-col items-center justify-center p-2.5 transition rounded-xl ${
-              activeTab === 'profile' ? 'text-orange-500 scale-105' : 'text-neutral-500 hover:text-neutral-300'
-            }`}
-            type="button"
-            aria-label="Profile"
-          >
-            <User className="w-5.5 h-5.5" />
-            <span className="text-[9px] mt-0.5 font-bold">Profile</span>
-          </button>
-
-        </div>
-
-      </div>
-
-      {/* FOOTER INFO BANNER */}
-      <div className="mt-4 text-center space-y-0.5 max-w-sm pointer-events-none">
-        <p className="text-[10px] text-neutral-600 font-semibold uppercase tracking-wider">MukBites Smartphone Simulator</p>
-        <p className="text-[9px] text-neutral-700">Immersive Reels feed, fast publishing, & automated food orders.</p>
       </div>
 
     </div>
