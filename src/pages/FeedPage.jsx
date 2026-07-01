@@ -12,6 +12,7 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
   const reelsContainerRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
+  const observerRef = useRef(null);
 
   // Scroll to shared reel on load/change
   useEffect(() => {
@@ -31,6 +32,45 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
       }
     }
   }, [reelId, reels]);
+
+  // Set up Intersection Observer for high-precision active reel detection
+  useEffect(() => {
+    const observerOptions = {
+      root: reelsContainerRef.current,
+      rootMargin: '0px',
+      threshold: 0.6 // Element is active when at least 60% visible
+    };
+
+    const handleIntersection = (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const indexAttr = entry.target.getAttribute('data-index');
+          if (indexAttr !== null) {
+            const index = parseInt(indexAttr, 10);
+            if (!isNaN(index)) {
+              setActiveIndex(index);
+            }
+          }
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(handleIntersection, observerOptions);
+    observerRef.current = observer;
+
+    // Observe each reel element in the container after a brief mount timeout
+    const timer = setTimeout(() => {
+      const reelItems = reelsContainerRef.current?.querySelectorAll('.feed-reel-item');
+      reelItems?.forEach(item => observer.observe(item));
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      if (observer) {
+        observer.disconnect();
+      }
+    };
+  }, [reels]);
   
   // Toast notifications state
   const [toastMessage, setToastMessage] = useState('');
@@ -40,18 +80,6 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
     setToastMessage(msg);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2200);
-  };
-
-  const handleScroll = (e) => {
-    const container = e.currentTarget;
-    const scrollTop = container.scrollTop;
-    // Standard viewport height in simulator is 788px
-    const itemHeight = container.clientHeight || 788;
-    const newIndex = Math.round(scrollTop / itemHeight);
-    
-    if (newIndex !== activeIndex && newIndex >= 0 && newIndex < reels.length) {
-      setActiveIndex(newIndex);
-    }
   };
 
   return (
@@ -75,7 +103,6 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
       {/* Vertical Snap Scrolling Reel viewport */}
       <div
         ref={reelsContainerRef}
-        onScroll={handleScroll}
         className="snap-y snap-mandatory overflow-y-scroll h-full w-full pb-16 scrollbar-none"
       >
         {reels.map((reel, index) => (
@@ -158,7 +185,8 @@ function FeedReelItem({
   return (
     <div
       id={`reel-item-${reel.id}`}
-      className="relative w-full h-full shrink-0 snap-start bg-[#050505] flex flex-col justify-end"
+      data-index={index}
+      className="feed-reel-item relative w-full h-full shrink-0 snap-start bg-[#050505] flex flex-col justify-end"
     >
       
       {/* 1. Full Screen Video Layer */}
