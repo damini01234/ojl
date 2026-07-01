@@ -123,7 +123,7 @@ export default function ReelVideo({ videoUrl, fallbackImage, isActive, isMuted, 
         poster={fallbackImage}
         autoPlay
         loop
-        muted={isMuted}
+        muted
         playsInline
         onWaiting={handleWaiting}
         onPlaying={handlePlaying}
