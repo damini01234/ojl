@@ -307,7 +307,7 @@ export default function LoginPage({ onLoginSuccess }) {
             MukBites
           </h1>
           <p className="text-[10px] text-neutral-400 font-medium px-6">
-            Patna's shoppable food reels ecosystem. Connect with food and order instantly.
+            Scroll. Crave. Order instantly.
           </p>
         </div>
 
