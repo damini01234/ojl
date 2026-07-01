@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, ShoppingBag, Settings, Grid, Film, Award, LogOut, Edit3, CheckCircle, Camera, Check, Link } from 'lucide-react';
 import { AVATAR_PRESETS } from '../data/sampleData';
-import { supabase } from '../utils/supabaseClient';
 
 export default function ProfilePage({ currentUser, orderHistory, reels, followingList = [], onUpdateProfile, onLogout }) {
   const navigate = useNavigate();

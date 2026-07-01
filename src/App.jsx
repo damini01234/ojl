@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { HashRouter } from 'react-router-dom';
 import AppRoutes from './routes/AppRoutes';
 import { SAMPLE_REELS } from './data/sampleData';
-import { supabase } from './utils/supabaseClient';
 
 /**
  * Main App Container
