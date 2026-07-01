@@ -221,10 +221,31 @@ export default function CheckoutPage({ onAddOrderToHistory }) {
             exit={{ opacity: 0 }}
             className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-none pb-20"
           >
-            {/* Restaurant Detail Banner */}
+            {/* Restaurant Detail Banner with matching food video/image */}
             <div className="bg-neutral-950/60 border border-neutral-900 rounded-2xl p-4 flex gap-3.5 items-center">
-              <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
-                <ShoppingBag className="w-6 h-6 animate-pulse" />
+              <div className="w-12 h-12 rounded-xl border border-white/10 overflow-hidden bg-neutral-900 flex items-center justify-center shrink-0">
+                {reel.videoUrl ? (
+                  <video 
+                    src={reel.videoUrl} 
+                    className="w-full h-full object-cover"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : reel.foodImage ? (
+                  <img 
+                    src={reel.foodImage} 
+                    alt={reel.dishName} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <img 
+                    src={reel.profilePic} 
+                    alt={reel.dishName} 
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
               <div className="min-w-0">
                 <span className="text-[8px] uppercase tracking-wider text-orange-500 font-bold block">Ordering from</span>

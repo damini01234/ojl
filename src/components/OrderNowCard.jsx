@@ -36,13 +36,30 @@ export default function OrderNowCard({ reel, isVisible, onClose }) {
             <X className="w-3 h-3" />
           </button>
 
-          {/* Food Image Thumbnail */}
-          <div className="w-full aspect-square rounded-xl overflow-hidden shrink-0 border border-white/5 relative bg-neutral-900 mb-1.5">
-            <img 
-              src={reel.profilePic} 
-              alt={reel.dishName} 
-              className="w-full h-full object-cover"
-            />
+          {/* Food Image/Video Thumbnail */}
+          <div className="w-full aspect-square rounded-xl overflow-hidden shrink-0 border border-white/5 relative bg-neutral-900 mb-1.5 flex items-center justify-center">
+            {reel.videoUrl ? (
+              <video 
+                src={reel.videoUrl} 
+                className="w-full h-full object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            ) : reel.foodImage ? (
+              <img 
+                src={reel.foodImage} 
+                alt={reel.dishName} 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <img 
+                src={reel.profilePic} 
+                alt={reel.dishName} 
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
 
           {/* Food name */}
