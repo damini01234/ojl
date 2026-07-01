@@ -5,7 +5,7 @@ export const SAMPLE_REELS = [
   {
     id: 'mukbites-reel-1',
     username: 'burger_palace',
-    profilePic: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=100&h=100&fit=crop',
+    profilePic: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
     videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-pouring-sauce-on-a-freshly-made-burger-44584-large.mp4',
     foodImage: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&h=300&fit=crop',
     caption: 'Behold the Cheesy Lava Burger! Drenched in hot cheddar cheese sauce 🍔🧀. Double patty, extra crispy lettuce. #burgerlove #cheese #fastfood #mukbites',

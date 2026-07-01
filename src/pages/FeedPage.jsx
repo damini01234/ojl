@@ -103,7 +103,7 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
       {/* Vertical Snap Scrolling Reel viewport */}
       <div
         ref={reelsContainerRef}
-        className="snap-y snap-mandatory overflow-y-scroll h-full w-full pb-16 scrollbar-none"
+        className="snap-y snap-mandatory overflow-y-scroll h-[calc(100%-4rem)] w-full scrollbar-none"
       >
         {reels.map((reel, index) => (
           <FeedReelItem
