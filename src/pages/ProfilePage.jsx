@@ -95,23 +95,35 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
     setIsSaving(true);
 
     try {
-      const { error: profileErr } = await supabase
-        .from('profiles')
-        .update({
-          username: handleTrim,
-          bio: bioTrim,
-          profile_image: editPic
-        })
-        .eq('id', currentUser.id);
+      const isLocalOrGuest = currentUser.email === 'guest@mukbites.com' || currentUser.id?.startsWith('local-') || !currentUser.id;
+      
+      if (!isLocalOrGuest) {
+        try {
+          const { error: profileErr } = await supabase
+            .from('profiles')
+            .update({
+              username: handleTrim,
+              bio: bioTrim,
+              profile_image: editPic
+            })
+            .eq('id', currentUser.id);
 
-      if (profileErr) throw profileErr;
+          if (profileErr) {
+            console.warn("Supabase profile update warning:", profileErr);
+          }
 
-      const { error: authErr } = await supabase.auth.updateUser({
-        data: {
-          full_name: nameTrim
+          const { error: authErr } = await supabase.auth.updateUser({
+            data: {
+              full_name: nameTrim
+            }
+          });
+          if (authErr) {
+            console.warn("Supabase auth update warning:", authErr);
+          }
+        } catch (dbErr) {
+          console.warn("Supabase communication failure, saving locally:", dbErr);
         }
-      });
-      if (authErr) throw authErr;
+      }
 
       const updated = {
         ...currentUser,
@@ -126,7 +138,7 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
       }
       setIsEditingProfile(false);
     } catch (err) {
-      setValidationError(err.message || 'Failed to update profile in database.');
+      setValidationError(err.message || 'Failed to update profile.');
     } finally {
       setIsSaving(false);
     }
@@ -139,9 +151,12 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
     navigate('/login');
   };
 
-  // Filter reels created by this user
-  const userHandleClean = currentUser.creatorHandle.replace('@', '').toLowerCase();
-  const myReels = reels.filter(r => r.username.toLowerCase() === userHandleClean);
+  // Filter reels created by this user (normalizing @ handles before comparison)
+  const userHandleClean = currentUser.creatorHandle.replace('@', '').trim().toLowerCase();
+  const myReels = reels.filter(r => {
+    const reelUserClean = r.username.replace('@', '').trim().toLowerCase();
+    return reelUserClean === userHandleClean;
+  });
   // Filter reels saved by the user
   const savedReels = reels.filter(r => r.isSaved);
 

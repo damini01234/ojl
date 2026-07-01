@@ -141,37 +141,91 @@ export default function LoginPage({ onLoginSuccess }) {
     }
 
     try {
-      const { data, error: signUpErr } = await supabase.auth.signUp({
-        email: trimmedEmail,
-        password: pwd,
-        options: {
-          data: {
-            full_name: trimmedName
+      let data = null;
+      let signUpErr = null;
+      try {
+        const res = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password: pwd,
+          options: {
+            data: {
+              full_name: trimmedName
+            }
           }
-        }
-      });
-
-      if (signUpErr) throw signUpErr;
-
-      if (data.user) {
-        const { error: profileErr } = await supabase.from('profiles').upsert({
-          id: data.user.id,
-          username: trimmedUser,
-          bio: '🍔 Eating my way through life. Double tap to order instantly on MukBites!',
-          profile_image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
         });
+        data = res.data;
+        signUpErr = res.error;
+      } catch (networkErr) {
+        console.warn("Supabase network error during signup:", networkErr);
+        signUpErr = networkErr;
+      }
 
-        if (profileErr) throw profileErr;
+      if (signUpErr) {
+        // Fallback to local registration if Supabase is offline or fails
+        console.warn("Supabase signup failed, falling back to local registration:", signUpErr);
+        const usersList = JSON.parse(localStorage.getItem('mukbites_users') || '[]');
+        if (usersList.some(u => u.email.toLowerCase() === trimmedEmail.toLowerCase() || u.username.toLowerCase() === trimmedUser.toLowerCase())) {
+          throw new Error('Username or Email already registered.');
+        }
+
+        const newUser = {
+          fullName: trimmedName,
+          username: trimmedUser,
+          email: trimmedEmail,
+          password: pwd,
+          bio: '🍔 Eating my way through life. Double tap to order instantly on MukBites!',
+          profilePic: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
+        };
+        usersList.push(newUser);
+        localStorage.setItem('mukbites_users', JSON.stringify(usersList));
+
+        const sessionData = {
+          id: `local-${Date.now()}`,
+          fullName: trimmedName,
+          creatorHandle: trimmedUser,
+          email: trimmedEmail,
+          bio: newUser.bio,
+          profilePic: newUser.profilePic
+        };
+
+        localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
+        if (onLoginSuccess) {
+          onLoginSuccess(sessionData);
+        }
+
+        setSuccessMsg('Account created successfully (Local Offline Mode)! Welcome to MukBites.');
+        setTimeout(() => {
+          navigate(from, { replace: true });
+        }, 1000);
+        return;
+      }
+
+      if (data && data.user) {
+        try {
+          const { error: profileErr } = await supabase.from('profiles').upsert({
+            id: data.user.id,
+            username: trimmedUser,
+            bio: '🍔 Eating my way through life. Double tap to order instantly on MukBites!',
+            profile_image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
+          });
+          if (profileErr) {
+            console.warn("Could not insert profile in database, using local fallback:", profileErr);
+          }
+        } catch (dbErr) {
+          console.warn("Exception writing profile to database:", dbErr);
+        }
 
         try {
           const usersList = JSON.parse(localStorage.getItem('mukbites_users') || '[]');
-          usersList.push({
-            fullName: trimmedName,
-            username: trimmedUser,
-            email: trimmedEmail,
-            password: pwd
-          });
-          localStorage.setItem('mukbites_users', JSON.stringify(usersList));
+          if (!usersList.some(u => u.email.toLowerCase() === trimmedEmail.toLowerCase())) {
+            usersList.push({
+              fullName: trimmedName,
+              username: trimmedUser,
+              email: trimmedEmail,
+              password: pwd
+            });
+            localStorage.setItem('mukbites_users', JSON.stringify(usersList));
+          }
         } catch {}
 
         const sessionData = {
@@ -219,57 +273,71 @@ export default function LoginPage({ onLoginSuccess }) {
     }
 
     try {
-      const { data, error: loginErr } = await supabase.auth.signInWithPassword({
-        email: resolvedEmail,
-        password: pwd
-      });
+      let data = null;
+      let loginErr = null;
+      try {
+        const res = await supabase.auth.signInWithPassword({
+          email: resolvedEmail,
+          password: pwd
+        });
+        data = res.data;
+        loginErr = res.error;
+      } catch (networkErr) {
+        console.warn("Supabase network error during login:", networkErr);
+        loginErr = networkErr;
+      }
 
       if (loginErr) {
+        // Check local storage users list as a fallback (Offline Mode)
+        const usersList = JSON.parse(localStorage.getItem('mukbites_users') || '[]');
         const isDemo = DEMO_ACCOUNTS.find(
-          acc => acc.email.toLowerCase() === resolvedEmail.toLowerCase() && acc.password === pwd
+          acc => acc.username.toLowerCase() === ident || acc.email.toLowerCase() === resolvedEmail.toLowerCase()
+        );
+        const localUser = usersList.find(
+          u => (u.username.toLowerCase() === ident || u.email.toLowerCase() === resolvedEmail.toLowerCase()) && u.password === pwd
         );
 
-        if (isDemo && (loginErr.message?.includes('Invalid login credentials') || loginErr.status === 400)) {
-          setSuccessMsg(`Setting up demo account ${isDemo.username}...`);
-          
-          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-            email: isDemo.email,
-            password: isDemo.password,
-            options: {
-              data: {
-                full_name: isDemo.fullName
-              }
-            }
-          });
-
-          if (signUpErr) throw signUpErr;
-
-          if (signUpData.user) {
-            const { error: profileErr } = await supabase.from('profiles').upsert({
-              id: signUpData.user.id,
-              username: isDemo.username,
-              bio: '🍔 Eating my way through life. Double tap to order instantly on MukBites!',
-              profile_image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
-            });
-            if (profileErr) throw profileErr;
+        if (localUser) {
+          const sessionData = {
+            id: localUser.id || `local-${Date.now()}`,
+            fullName: localUser.fullName,
+            creatorHandle: localUser.username,
+            email: localUser.email,
+            bio: localUser.bio || '🍔 Eating my way through life. Double tap to order instantly on MukBites!',
+            profilePic: localUser.profilePic || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
+          };
+          localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
+          if (onLoginSuccess) {
+            onLoginSuccess(sessionData);
           }
-
-          const { data: retryData, error: retryErr } = await supabase.auth.signInWithPassword({
+          setSuccessMsg('Logged in successfully (Local Offline Mode)!');
+          setTimeout(() => {
+            navigate(from, { replace: true });
+          }, 1000);
+          return;
+        } else if (isDemo && isDemo.password === pwd) {
+          const sessionData = {
+            id: `local-demo-${Date.now()}`,
+            fullName: isDemo.fullName,
+            creatorHandle: isDemo.username,
             email: isDemo.email,
-            password: isDemo.password
-          });
-
-          if (retryErr) throw retryErr;
-
-          setSuccessMsg(`Welcome, ${isDemo.fullName}! Redirecting...`);
+            bio: '🍔 Eating my way through life. Double tap to order instantly on MukBites!',
+            profilePic: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
+          };
+          
+          // Seed demo account in local storage
           try {
-            const usersList = JSON.parse(localStorage.getItem('mukbites_users') || '[]');
             if (!usersList.some(u => u.username.toLowerCase() === isDemo.username.toLowerCase())) {
               usersList.push(isDemo);
               localStorage.setItem('mukbites_users', JSON.stringify(usersList));
             }
           } catch {}
 
+          localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
+          if (onLoginSuccess) {
+            onLoginSuccess(sessionData);
+          }
+          setSuccessMsg('Logged in demo account (Local Offline Mode)!');
           setTimeout(() => {
             navigate(from, { replace: true });
           }, 1000);
@@ -279,12 +347,20 @@ export default function LoginPage({ onLoginSuccess }) {
         }
       }
 
-      if (data.user) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('username, bio, profile_image')
-          .eq('id', data.user.id)
-          .single();
+      if (data && data.user) {
+        let profileData = null;
+        try {
+          const { data: prof, error: profErr } = await supabase
+            .from('profiles')
+            .select('username, bio, profile_image')
+            .eq('id', data.user.id)
+            .single();
+          if (!profErr) {
+            profileData = prof;
+          }
+        } catch (dbErr) {
+          console.warn("Exception reading profile from Supabase:", dbErr);
+        }
 
         let handle = profileData?.username || `@user_${data.user.id.slice(0, 5)}`;
         if (!handle.startsWith('@')) {

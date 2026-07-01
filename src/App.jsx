@@ -135,18 +135,25 @@ export default function App() {
 
   const fetchUserProfile = async (user) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') {
-        throw error;
+      let profileData = null;
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (!error) {
+          profileData = data;
+        } else if (error.code !== 'PGRST116') {
+          console.warn("Supabase profiles query error:", error);
+        }
+      } catch (dbErr) {
+        console.warn("Exception fetching user profile from Supabase:", dbErr);
       }
 
-      if (data) {
-        let handle = data.username || `user_${user.id.slice(0, 5)}`;
+      if (profileData) {
+        let handle = profileData.username || `user_${user.id.slice(0, 5)}`;
         if (!handle.startsWith('@')) {
           handle = `@${handle}`;
         }
@@ -155,30 +162,35 @@ export default function App() {
           fullName: user.user_metadata?.full_name || handle.replace('@', ''),
           creatorHandle: handle,
           email: user.email,
-          bio: data.bio || '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
-          profilePic: data.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
+          bio: profileData.bio || '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
+          profilePic: profileData.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
         };
         setCurrentUser(sessionData);
         localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
       } else {
         const defaultHandle = `@user_${user.id.slice(0, 5)}`;
-        const defaultProfile = {
-          id: user.id,
-          username: defaultHandle,
-          bio: '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
-          profile_image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
-        };
-        await supabase.from('profiles').upsert(defaultProfile);
         const sessionData = {
           id: user.id,
           fullName: user.user_metadata?.full_name || 'MukBites User',
           creatorHandle: defaultHandle,
           email: user.email,
-          bio: defaultProfile.bio,
-          profilePic: defaultProfile.profile_image
+          bio: '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
+          profilePic: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
         };
         setCurrentUser(sessionData);
         localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
+
+        // Attempt background insert of default profile
+        try {
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            username: defaultHandle,
+            bio: sessionData.bio,
+            profile_image: sessionData.profilePic
+          });
+        } catch (dbUpsertErr) {
+          console.warn("Failed background upsert of default profile:", dbUpsertErr);
+        }
       }
     } catch (err) {
       console.error("Error loading profile:", err);
@@ -199,6 +211,18 @@ export default function App() {
       if (session) {
         fetchUserProfile(session.user);
       } else {
+        // Protect Guest and Local Offline sessions from being wiped out by null sessions from Supabase init
+        const savedSessionStr = localStorage.getItem('mukbites_session');
+        if (savedSessionStr) {
+          try {
+            const savedSession = JSON.parse(savedSessionStr);
+            const isLocal = savedSession.id?.startsWith('local-') || savedSession.email === 'guest@mukbites.com';
+            if (isLocal) {
+              // Retain active Guest or Local Offline sessions
+              return;
+            }
+          } catch (e) {}
+        }
         setCurrentUser(null);
         localStorage.removeItem('mukbites_session');
       }
