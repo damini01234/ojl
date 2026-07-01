@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, ShoppingBag, Settings, Grid, Film, Award, LogOut, Edit3, CheckCircle, Camera, Check, Link } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AVATAR_PRESETS } from '../data/sampleData';
 
 export default function ProfilePage({ currentUser, orderHistory, reels, followingList = [], onUpdateProfile, onLogout }) {
@@ -205,7 +206,7 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
           <div className="flex flex-1 justify-around items-center text-center">
             <div>
               <p className="text-sm font-black text-white">{myReels.length}</p>
-              <p className="text-[9px] text-neutral-500 font-extrabold uppercase tracking-wide">Posts</p>
+              <p className="text-[9px] text-neutral-500 font-extrabold uppercase tracking-wide">Uploads</p>
             </div>
             <div>
               <p className="text-sm font-black text-white">{followersCount.toLocaleString()}</p>
@@ -306,9 +307,31 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
               </button>
             </div>
             <p className="text-[9px] text-neutral-500 font-bold uppercase tracking-wider">MukBites Foodie</p>
-            <p className="text-xs text-neutral-400 leading-relaxed font-medium whitespace-pre-wrap">
+            <p className="text-xs text-neutral-400 leading-relaxed font-medium whitespace-pre-wrap mb-2">
               {currentUser.bio}
             </p>
+
+            {/* Account Details Box */}
+            <div className="mt-3 p-3 bg-neutral-950/60 border border-neutral-900 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between text-[10px] border-b border-neutral-900 pb-1.5">
+                <span className="text-neutral-500 font-bold uppercase tracking-wider">Account Info</span>
+                <span className="text-orange-500 font-black text-[9px] bg-orange-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Active</span>
+              </div>
+              <div className="space-y-1.5 text-[11px]">
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-medium">Username</span>
+                  <span className="text-neutral-200 font-semibold">{currentUser.creatorHandle}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-medium">User ID</span>
+                  <span className="text-neutral-300 font-mono text-[10px] select-all">{currentUser.id}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-neutral-500 font-medium">Email</span>
+                  <span className="text-neutral-200 select-all">{currentUser.email}</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -352,7 +375,7 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
               {myReels.length === 0 ? (
                 <div className="text-center py-12 bg-neutral-950/20 border border-neutral-900 rounded-2xl p-6">
                   <Film className="w-8 h-8 text-neutral-800 mx-auto" />
-                  <p className="text-xs text-neutral-500 mt-2 font-medium">You haven't uploaded any food reels yet.</p>
+                  <p className="text-xs text-neutral-500 mt-2 font-medium">No uploads yet</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">

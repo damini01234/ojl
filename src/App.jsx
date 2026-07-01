@@ -181,6 +181,23 @@ export default function App() {
   };
 
   const handleUpdateProfile = (updatedProfile) => {
+    try {
+      const localReels = JSON.parse(localStorage.getItem('mukbites_local_reels') || '[]');
+      const updatedLocalReels = localReels.map(r => {
+        if (r.userId === updatedProfile.id || r.username.toLowerCase() === (currentUser?.creatorHandle || '').toLowerCase()) {
+          return {
+            ...r,
+            username: updatedProfile.creatorHandle,
+            profilePic: updatedProfile.profilePic
+          };
+        }
+        return r;
+      });
+      localStorage.setItem('mukbites_local_reels', JSON.stringify(updatedLocalReels));
+    } catch (err) {
+      console.error("Failed to sync local reels with updated profile:", err);
+    }
+
     setCurrentUser(updatedProfile);
     localStorage.setItem('mukbites_session', JSON.stringify(updatedProfile));
     fetchReels(); // Refresh handles and profile pictures in the feed
