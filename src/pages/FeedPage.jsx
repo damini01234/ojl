@@ -164,6 +164,7 @@ function FeedReelItem({
       {/* 1. Full Screen Video Layer */}
       <ReelVideo
         videoUrl={reel.videoUrl}
+        fallbackImage={reel.foodImage || reel.profilePic}
         isActive={isActive}
         isMuted={isMuted}
         onToggleMute={onToggleMute}

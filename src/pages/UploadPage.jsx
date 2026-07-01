@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
-import { supabase } from '../utils/supabaseClient';
 
 export default function UploadPage({ onPublish }) {
   const navigate = useNavigate();
@@ -42,7 +41,7 @@ export default function UploadPage({ onPublish }) {
     setValidationError('');
   };
 
-  const handlePublishSubmit = async (e) => {
+  const handlePublishSubmit = (e) => {
     e.preventDefault();
     setValidationError('');
     setUploadProgressMsg('');
@@ -68,52 +67,53 @@ export default function UploadPage({ onPublish }) {
     setIsPublishing(true);
 
     try {
-      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr) throw sessionErr;
-      if (!session) {
+      const savedSessionStr = localStorage.getItem('mukbites_session');
+      if (!savedSessionStr) {
         throw new Error("You must be logged in to upload food reels.");
       }
+      const session = JSON.parse(savedSessionStr);
 
-      const userId = session.user.id;
       let finalVideoUrl = videoUrl.trim();
 
       if (videoFile) {
-        setUploadProgressMsg('Uploading video file to Supabase...');
-        const fileExt = videoFile.name.split('.').pop();
-        const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `videos/${userId}/${fileName}`;
-
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('food-videos')
-          .upload(filePath, videoFile);
-
-        if (uploadErr) throw uploadErr;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('food-videos')
-          .getPublicUrl(filePath);
-
-        finalVideoUrl = publicUrl;
+        setUploadProgressMsg('Preparing local video file...');
+        try {
+          finalVideoUrl = URL.createObjectURL(videoFile);
+        } catch (fileErr) {
+          console.warn("Failed to create blob URL:", fileErr);
+        }
       }
 
       if (!finalVideoUrl) {
         finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-chef-preparing-a-dish-in-a-professional-kitchen-44591-large.mp4';
       }
 
-      setUploadProgressMsg('Saving reel details to Supabase...');
+      setUploadProgressMsg('Saving reel details...');
 
-      const { error: insertErr } = await supabase
-        .from('videos')
-        .insert({
-          user_id: userId,
-          video_url: finalVideoUrl,
-          food_name: cleanDish,
-          price: cleanPrice,
-          caption: cleanCap,
-          restaurant_name: cleanRest
-        });
+      const localReel = {
+        id: `local-reel-${Date.now()}`,
+        userId: session.id || 'local-guest',
+        username: session.creatorHandle || '@guest_mukbites',
+        profilePic: session.profilePic || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+        videoUrl: finalVideoUrl,
+        foodImage: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop', // A nice default dish photo
+        caption: cleanCap || `Freshly prepared ${cleanDish}!`,
+        likesCount: 0,
+        sharesCount: 0,
+        isLiked: false,
+        isSaved: false,
+        dishName: cleanDish,
+        restaurantName: cleanRest,
+        price: cleanPrice,
+        rating: 4.5,
+        deliveryTime: '20-30 mins',
+        deliveryFee: 30,
+        followersCount: 10
+      };
 
-      if (insertErr) throw insertErr;
+      const localReels = JSON.parse(localStorage.getItem('mukbites_local_reels') || '[]');
+      localReels.unshift(localReel);
+      localStorage.setItem('mukbites_local_reels', JSON.stringify(localReels));
 
       setUploadProgressMsg('Reel published successfully!');
 
@@ -234,7 +234,7 @@ export default function UploadPage({ onPublish }) {
                 onChange={(e) => setVideoUrl(e.target.value)}
                 className="w-full bg-neutral-900 border border-neutral-800 focus:border-orange-500/30 rounded-xl py-2.5 px-4 text-xs font-semibold text-white outline-none placeholder-neutral-600 transition"
               />
-              <span className="text-[9px] text-neutral-500 block leading-normal pl-0.5">
+              <span className="text-[9px] text-neutral-550 block leading-normal pl-0.5">
                 Leave blank/no-file to use our high-definition chef loop fallbacks.
               </span>
             </div>

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function OrderNowCard({ reel, isVisible, onClose }) {
   const navigate = useNavigate();
+  const [hasVideoError, setHasVideoError] = useState(false);
 
   const handleOrderClick = (e) => {
     e.stopPropagation();
@@ -38,7 +39,7 @@ export default function OrderNowCard({ reel, isVisible, onClose }) {
 
           {/* Food Image/Video Thumbnail */}
           <div className="w-full aspect-square rounded-xl overflow-hidden shrink-0 border border-white/5 relative bg-neutral-900 mb-1.5 flex items-center justify-center">
-            {reel.videoUrl ? (
+            {reel.videoUrl && !hasVideoError ? (
               <video 
                 src={reel.videoUrl} 
                 className="w-full h-full object-cover"
@@ -46,16 +47,11 @@ export default function OrderNowCard({ reel, isVisible, onClose }) {
                 loop
                 muted
                 playsInline
-              />
-            ) : reel.foodImage ? (
-              <img 
-                src={reel.foodImage} 
-                alt={reel.dishName} 
-                className="w-full h-full object-cover"
+                onError={() => setHasVideoError(true)}
               />
             ) : (
               <img 
-                src={reel.profilePic} 
+                src={reel.foodImage || reel.profilePic} 
                 alt={reel.dishName} 
                 className="w-full h-full object-cover"
               />

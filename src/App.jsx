@@ -75,162 +75,31 @@ export default function App() {
     }
   });
 
-  // Fetch reels from Supabase
-  const fetchReels = async () => {
+  // Fetch reels (Frontend-Only data load)
+  const fetchReels = () => {
     try {
-      const { data, error } = await supabase
-        .from('videos')
-        .select(`
-          id,
-          user_id,
-          video_url,
-          food_name,
-          price,
-          caption,
-          restaurant_name,
-          profiles (
-            username,
-            profile_image
-          )
-        `)
-        .order('id', { ascending: false });
-
-      if (error) throw error;
-
-      const mapped = data.map(v => {
-        let handle = v.profiles?.username || 'anonymous';
-        if (!handle.startsWith('@')) {
-          handle = `@${handle}`;
-        }
-        return {
-          id: v.id,
-          userId: v.user_id,
-          username: handle,
-          profilePic: v.profiles?.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop',
-          videoUrl: v.video_url,
-          caption: v.caption || '',
-          likesCount: 154,
-          sharesCount: 38,
-          isLiked: false,
-          isSaved: false,
-          dishName: v.food_name,
-          restaurantName: v.restaurant_name || 'Gourmet Kitchen',
-          price: Number(v.price) || 99,
-          rating: 4.5,
-          deliveryTime: '25 mins',
-          deliveryFee: 30,
-          followersCount: 1200
-        };
-      });
-
-      // Merge Supabase reels with SAMPLE_REELS so feed is never blank
-      const combined = [...mapped, ...SAMPLE_REELS.filter(sr => !mapped.some(mv => mv.id === sr.id))];
+      const localReels = JSON.parse(localStorage.getItem('mukbites_local_reels') || '[]');
+      // Filter SAMPLE_REELS to exclude any that might duplicate IDs
+      const combined = [...localReels, ...SAMPLE_REELS.filter(sr => !localReels.some(lr => lr.id === sr.id))];
       setReelsDataset(combined);
     } catch (err) {
-      console.error("Error fetching reels from Supabase:", err);
-      // Fallback
+      console.error("Error loading local reels:", err);
       setReelsDataset(SAMPLE_REELS);
-    }
-  };
-
-  const fetchUserProfile = async (user) => {
-    try {
-      let profileData = null;
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (!error) {
-          profileData = data;
-        } else if (error.code !== 'PGRST116') {
-          console.warn("Supabase profiles query error:", error);
-        }
-      } catch (dbErr) {
-        console.warn("Exception fetching user profile from Supabase:", dbErr);
-      }
-
-      if (profileData) {
-        let handle = profileData.username || `user_${user.id.slice(0, 5)}`;
-        if (!handle.startsWith('@')) {
-          handle = `@${handle}`;
-        }
-        const sessionData = {
-          id: user.id,
-          fullName: user.user_metadata?.full_name || handle.replace('@', ''),
-          creatorHandle: handle,
-          email: user.email,
-          bio: profileData.bio || '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
-          profilePic: profileData.profile_image || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
-        };
-        setCurrentUser(sessionData);
-        localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
-      } else {
-        const defaultHandle = `@user_${user.id.slice(0, 5)}`;
-        const sessionData = {
-          id: user.id,
-          fullName: user.user_metadata?.full_name || 'MukBites User',
-          creatorHandle: defaultHandle,
-          email: user.email,
-          bio: '🍔 Just exploring Patna\'s shoppable food reels on MukBites!',
-          profilePic: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop'
-        };
-        setCurrentUser(sessionData);
-        localStorage.setItem('mukbites_session', JSON.stringify(sessionData));
-
-        // Attempt background insert of default profile
-        try {
-          await supabase.from('profiles').upsert({
-            id: user.id,
-            username: defaultHandle,
-            bio: sessionData.bio,
-            profile_image: sessionData.profilePic
-          });
-        } catch (dbUpsertErr) {
-          console.warn("Failed background upsert of default profile:", dbUpsertErr);
-        }
-      }
-    } catch (err) {
-      console.error("Error loading profile:", err);
     }
   };
 
   useEffect(() => {
     fetchReels();
 
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        fetchUserProfile(session.user);
+    // Check active session strictly from local storage for offline operation
+    try {
+      const savedSession = localStorage.getItem('mukbites_session');
+      if (savedSession) {
+        setCurrentUser(JSON.parse(savedSession));
       }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        fetchUserProfile(session.user);
-      } else {
-        // Protect Guest and Local Offline sessions from being wiped out by null sessions from Supabase init
-        const savedSessionStr = localStorage.getItem('mukbites_session');
-        if (savedSessionStr) {
-          try {
-            const savedSession = JSON.parse(savedSessionStr);
-            const isLocal = savedSession.id?.startsWith('local-') || savedSession.email === 'guest@mukbites.com';
-            if (isLocal) {
-              // Retain active Guest or Local Offline sessions
-              return;
-            }
-          } catch (e) {}
-        }
-        setCurrentUser(null);
-        localStorage.removeItem('mukbites_session');
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    } catch (err) {
+      console.error("Failed to load local session:", err);
+    }
   }, []);
 
   const handlePublishReel = () => {
@@ -305,8 +174,7 @@ export default function App() {
     setCurrentUser(session);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
     setCurrentUser(null);
     setFollowingList([]);
     localStorage.removeItem('mukbites_session');

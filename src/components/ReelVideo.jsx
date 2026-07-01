@@ -2,18 +2,33 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function ReelVideo({ videoUrl, isActive, isMuted, onToggleMute, onDoubleTap }) {
+export default function ReelVideo({ videoUrl, fallbackImage, isActive, isMuted, onToggleMute, onDoubleTap }) {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(null); // 'play' | 'pause' | null
   const [showHeartOverlay, setShowHeartOverlay] = useState(false);
   const lastTap = useRef(0);
+
+  // Reset loading and error states when video URL changes
+  useEffect(() => {
+    setHasError(false);
+    setIsLoading(true);
+  }, [videoUrl]);
+
+  // Synchronize muted attribute directly on the DOM element for cross-browser support
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
 
   // Play/Pause when active state changes
   useEffect(() => {
     if (videoRef.current) {
       if (isActive) {
+        setHasError(false);
         setIsLoading(true);
         videoRef.current.currentTime = 0;
         videoRef.current.play()
@@ -31,7 +46,7 @@ export default function ReelVideo({ videoUrl, isActive, isMuted, onToggleMute, o
         setIsPlaying(false);
       }
     }
-  }, [isActive]);
+  }, [isActive, videoUrl]);
 
   // Handle tap/click and double tap
   const handleVideoTap = (e) => {
@@ -87,7 +102,15 @@ export default function ReelVideo({ videoUrl, isActive, isMuted, onToggleMute, o
     setIsLoading(false);
     setIsPlaying(true);
   };
-  const handleLoadedData = () => setIsLoading(false);
+  const handleLoadedData = () => {
+    setIsLoading(false);
+    setHasError(false);
+  };
+  const handleVideoError = (e) => {
+    console.error("Reel video failed to load or play:", e);
+    setHasError(true);
+    setIsLoading(false);
+  };
 
   return (
     <div 
@@ -97,18 +120,29 @@ export default function ReelVideo({ videoUrl, isActive, isMuted, onToggleMute, o
       <video
         ref={videoRef}
         src={videoUrl}
+        autoPlay
         loop
         muted={isMuted}
         playsInline
         onWaiting={handleWaiting}
         onPlaying={handlePlaying}
         onLoadedData={handleLoadedData}
+        onError={handleVideoError}
         className="w-full h-full object-cover z-0"
       />
 
+      {/* Fallback Image Layer if video fails to load */}
+      {hasError && fallbackImage && (
+        <img 
+          src={fallbackImage} 
+          alt="Food Fallback" 
+          className="absolute inset-0 w-full h-full object-cover z-0 animate-fadeIn"
+        />
+      )}
+
       {/* Buffering/Loading State */}
       <AnimatePresence>
-        {isLoading && (
+        {isLoading && !hasError && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

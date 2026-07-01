@@ -34,7 +34,7 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
     }
   }, [currentUser]);
 
-  const handleAvatarUpload = async (e) => {
+  const handleAvatarUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -42,25 +42,19 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
     setValidationError('');
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${currentUser.id}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      const { data, error: uploadErr } = await supabase.storage
-        .from('food-videos')
-        .upload(filePath, file);
-
-      if (uploadErr) throw uploadErr;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('food-videos')
-        .getPublicUrl(filePath);
-
-      setEditPic(publicUrl);
-      setCustomPicUrl(publicUrl);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setEditPic(reader.result);
+        setCustomPicUrl(reader.result);
+        setUploadingAvatar(false);
+      };
+      reader.onerror = () => {
+        setValidationError('Failed to read local image file.');
+        setUploadingAvatar(false);
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
-      setValidationError(err.message || 'Failed to upload avatar image.');
-    } finally {
+      setValidationError(err.message || 'Failed to load local file.');
       setUploadingAvatar(false);
     }
   };
@@ -73,7 +67,7 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
     );
   }
 
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = () => {
     setValidationError('');
     const nameTrim = editName.trim();
     let handleTrim = editHandle.trim();
@@ -95,34 +89,24 @@ export default function ProfilePage({ currentUser, orderHistory, reels, followin
     setIsSaving(true);
 
     try {
-      const isLocalOrGuest = currentUser.email === 'guest@mukbites.com' || currentUser.id?.startsWith('local-') || !currentUser.id;
-      
-      if (!isLocalOrGuest) {
-        try {
-          const { error: profileErr } = await supabase
-            .from('profiles')
-            .update({
+      // Sync local users database list in localStorage for persistence
+      try {
+        const usersList = JSON.parse(localStorage.getItem('mukbites_users') || '[]');
+        const updatedUsersList = usersList.map(u => {
+          if (u.email.toLowerCase() === currentUser.email.toLowerCase() || u.username.toLowerCase() === currentUser.creatorHandle.toLowerCase()) {
+            return {
+              ...u,
+              fullName: nameTrim,
               username: handleTrim,
               bio: bioTrim,
-              profile_image: editPic
-            })
-            .eq('id', currentUser.id);
-
-          if (profileErr) {
-            console.warn("Supabase profile update warning:", profileErr);
+              profilePic: editPic
+            };
           }
-
-          const { error: authErr } = await supabase.auth.updateUser({
-            data: {
-              full_name: nameTrim
-            }
-          });
-          if (authErr) {
-            console.warn("Supabase auth update warning:", authErr);
-          }
-        } catch (dbErr) {
-          console.warn("Supabase communication failure, saving locally:", dbErr);
-        }
+          return u;
+        });
+        localStorage.setItem('mukbites_users', JSON.stringify(updatedUsersList));
+      } catch (err) {
+        console.warn("Failed to update local users registry:", err);
       }
 
       const updated = {
