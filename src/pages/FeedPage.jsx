@@ -38,7 +38,7 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
     const observerOptions = {
       root: reelsContainerRef.current,
       rootMargin: '0px',
-      threshold: 0.6 // Element is active when at least 60% visible
+      threshold: 0.5 // Element is active when at least 50% visible
     };
 
     const handleIntersection = (entries) => {
@@ -82,6 +82,18 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
     setTimeout(() => setShowToast(false), 2200);
   };
 
+  // Fallback scroll listener to guarantee play/pause trigger in case observer delay occurs
+  const handleScroll = (e) => {
+    const container = e.currentTarget;
+    const scrollTop = container.scrollTop;
+    const itemHeight = container.clientHeight || 788;
+    const newIndex = Math.round(scrollTop / itemHeight);
+    
+    if (newIndex !== activeIndex && newIndex >= 0 && newIndex < reels.length) {
+      setActiveIndex(newIndex);
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-black overflow-hidden flex flex-col">
 
@@ -103,6 +115,7 @@ export default function FeedPage({ reels, followingList = [], onFollowToggle, on
       {/* Vertical Snap Scrolling Reel viewport */}
       <div
         ref={reelsContainerRef}
+        onScroll={handleScroll}
         className="snap-y snap-mandatory overflow-y-scroll h-[calc(100%-4rem)] w-full scrollbar-none"
       >
         {reels.map((reel, index) => (

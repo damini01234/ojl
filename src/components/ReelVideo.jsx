@@ -120,7 +120,8 @@ export default function ReelVideo({ videoUrl, fallbackImage, isActive, isMuted, 
       <video
         ref={videoRef}
         src={videoUrl}
-        autoPlay={isActive}
+        poster={fallbackImage}
+        autoPlay
         loop
         muted={isMuted}
         playsInline
